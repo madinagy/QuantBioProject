@@ -1,0 +1,51 @@
+# imports 
+import numpy as np
+from collections import defaultdict
+import pandas as pd
+import seaborn as sns
+
+import matplotlib.pyplot as plt
+from PIL import Image, ImageDraw
+from IPython.display import FileLink
+
+# Normalize both red and green intensities to the range [0, 1]
+colored_wells_df['Red Intensity Normalized'] = colored_wells_df['Red Intensity'] / colored_wells_df['Red Intensity'].max()
+colored_wells_df['Green Intensity Normalized'] = colored_wells_df['Green Intensity'] / colored_wells_df['Green Intensity'].max()
+
+# Calculate the normalized combined intensity
+colored_wells_df['Normalized Combined Intensity'] = (colored_wells_df['Red Intensity Normalized'] + 
+                                                      colored_wells_df['Green Intensity Normalized'])
+
+# Define thresholds to categorize as high or low
+red_threshold = colored_wells_df['Red Intensity Normalized'].median()
+green_threshold = colored_wells_df['Green Intensity Normalized'].median()
+
+# Function to categorize gene expression pattern
+def categorize_expression(row):
+    if row['Red Intensity Normalized'] > red_threshold and row['Green Intensity Normalized'] > green_threshold:
+        return 'High Expression in Both Samples'
+    elif row['Red Intensity Normalized'] < red_threshold and row['Green Intensity Normalized'] < green_threshold:
+        return 'Low Expression in Both Samples'
+    elif row['Red Intensity Normalized'] > red_threshold and row['Green Intensity Normalized'] < green_threshold:
+        return 'High Expression in Red, Low Expression in Green'
+    elif row['Red Intensity Normalized'] < red_threshold and row['Green Intensity Normalized'] > green_threshold:
+        return 'Low Expression in Red, High Expression in Green'
+    else:
+        return 'Low Expression in Both Samples'
+
+# Apply the function to create a new column for the expression pattern
+colored_wells_df['Expression Pattern'] = colored_wells_df.apply(categorize_expression, axis=1)
+
+# Create the resulting table with gene names, normalized intensities, and expression patterns
+expression_table = colored_wells_df[['Gene/Control Name', 'Red Intensity Normalized', 
+                                     'Green Intensity Normalized', 'Normalized Combined Intensity', 
+                                     'Expression Pattern']]
+
+# Save the expression table to a CSV file
+expression_table.to_csv('gene_expression_patterns.csv', index=False)
+
+# Print a confirmation message
+print("The expression table is available for download as 'gene_expression_patterns.csv' from the link below.")
+
+# Create a link to download the CSV file (for Jupyter Notebooks)
+FileLink('gene_expression_patterns.csv')
