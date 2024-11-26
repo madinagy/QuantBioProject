@@ -1,0 +1,418 @@
+# imports 
+import numpy as np
+from collections import defaultdict
+import pandas as pd
+
+import matplotlib.pyplot as plt
+from PIL import Image, ImageDraw
+
+# Load the image
+image_path = 'PrincetonData.png'
+image = Image.open(image_path)
+
+# Convert the image to RGB and as an array
+image_rgb = image.convert("RGB")
+image_array = np.array(image_rgb)
+
+# Get image dimensions
+image_width, image_height = image.size
+
+# Calculate cell size
+grid_size = (10, 10)
+cell_width = image_width // grid_size[0]
+cell_height = image_height // grid_size[1]
+
+# Add padding between cells
+spacing_factor = 1.08  # Increase this value for more spacing
+cell_width = int((image_width // grid_size[0]) * spacing_factor)
+cell_height = int((image_height // grid_size[1]) * spacing_factor)
+
+# Estimate circle diameter and scale it down (e.g., multiply by 0.5 to make it smaller)
+circle_diameter = 20
+
+# Create a blank (white) image of the same size as the original image
+new_image = Image.new("RGB", (image_width, image_height), color=(255, 255, 255))  # white background
+
+# Draw circles on the new image
+draw = ImageDraw.Draw(new_image)
+
+# Adjust offsets to position circles closer to edges without crowding
+global_x_offset = cell_width // 4  # Global offset for horizontal positioning
+global_y_offset = cell_height // 3  # Global offset for vertical positioning
+
+# Calculate circle centers with adjusted offsets
+for i in range(grid_size[0]):
+    for j in range(grid_size[1]):
+        # Calculate the adjusted center of each circle
+        x_center = j * cell_width + global_x_offset
+        y_center = i * cell_height + global_y_offset
+
+        # Draw the circle (ellipse with equal width and height)
+        draw.ellipse(
+            [x_center - circle_diameter // 2, y_center - circle_diameter // 2,
+             x_center + circle_diameter // 2, y_center + circle_diameter // 2],
+            fill=(128, 0, 128),  # purple color for visibility
+            outline=(0, 0, 0)  # black outline for clarity
+        )
+
+
+# Set up the subplot grid (1 row, 2 columns)
+fig, axes = plt.subplots(1, 2, figsize=(12, 6))  # You can adjust the figure size if needed
+
+# Show the original image on the left
+axes[0].imshow(image)
+axes[0].axis('off')  # Turn off axis for a cleaner view
+axes[0].set_title("Original Image")
+
+# Show the new image with circles on the right
+axes[1].imshow(new_image)
+axes[1].axis('off')  # Turn off axis for a cleaner view
+axes[1].set_title("Image with Circles")
+
+# Display the figure
+plt.tight_layout()  # Adjust layout to prevent overlap
+plt.show()
+# Create a copy of the original image to draw on
+overlay_image = image.copy()
+draw = ImageDraw.Draw(overlay_image)
+
+# Calculate circle centers with adjusted offsets
+for i in range(grid_size[0]):
+    for j in range(grid_size[1]):
+        # Calculate the adjusted center of each circle
+        x_center = j * cell_width + global_x_offset
+        y_center = i * cell_height + global_y_offset
+
+        # Draw the circle (ellipse with equal width and height)
+        draw.ellipse(
+            [x_center - circle_diameter // 2, y_center - circle_diameter // 2,
+             x_center + circle_diameter // 2, y_center + circle_diameter // 2],
+            fill=(128, 0, 128),  # purple color for visibility
+            outline=(0, 0, 0)  # black outline for clarity
+        )
+
+# Display the image with circles overlayed
+plt.figure(figsize=(6, 6))
+plt.imshow(overlay_image)
+plt.axis('off')  # Turn off axis for a cleaner view
+plt.title("Original Image with Circles Overlayed")
+plt.show()
+# Function to calculate the average color inside a circle
+def get_circle_average_color(image_array, center, diameter):
+    radius = diameter // 2
+    y, x = np.ogrid[:image_array.shape[0], :image_array.shape[1]]
+    mask = (x - center[0])**2 + (y - center[1])**2 <= radius**2
+    circle_region = image_array[mask]
+    
+    r_mean = circle_region[:, 0].mean()
+    g_mean = circle_region[:, 1].mean()
+    b_mean = circle_region[:, 2].mean()
+
+    return int(r_mean), int(g_mean), int(b_mean)
+
+
+# Initialize lists to store position and RGB values
+positions = []
+r_values = []
+g_values = []
+b_values = []
+
+# Loop through the grid and extract the average color for each circle
+for i in range(grid_size[0]):
+    for j in range(grid_size[1]):
+        # Calculate the center of each circle with offset
+        x_center = j * cell_width + global_x_offset
+        y_center = i * cell_height + global_y_offset
+
+        # Get the average color inside the circle
+        r_mean, g_mean, b_mean = get_circle_average_color(image_array, (x_center, y_center), circle_diameter)
+
+        # Append the position and RGB values
+        positions.append((i, j))
+        r_values.append(r_mean)
+        g_values.append(g_mean)
+        b_values.append(b_mean)
+
+# Create a DataFrame with the RGB values and positions
+df_colors = pd.DataFrame({
+    "Position": positions,
+    "R": r_values,
+    "G": g_values,
+    "B": b_values
+})
+
+# Show the first 10 rows of the DataFrame
+print(df_colors.head(10))
+
+# Create a copy of the original image to overlay circles
+overlay_image = image.copy()
+draw = ImageDraw.Draw(overlay_image)
+
+# Loop through each position and draw the circle with the corresponding color
+for index, row in df_colors.iterrows():
+    i, j = row['Position']
+    r, g, b = row['R'], row['G'], row['B']
+
+    # Calculate the center of each circle with offset and scale
+    x_center = j * cell_width + global_x_offset
+    y_center = i * cell_height + global_y_offset
+
+    # Draw the circle on the original image copy
+    draw.ellipse(
+        [x_center - circle_diameter // 2, y_center - circle_diameter // 2,
+         x_center + circle_diameter // 2, y_center + circle_diameter // 2],
+        fill=(r, g, b),  # Fill with the extracted average color
+        outline=(0, 0, 0)  # Optional: black outline for clarity
+    )
+
+# Show the overlay image with colored circles
+plt.figure(figsize=(8, 8))
+plt.imshow(overlay_image)
+plt.axis('off')  # Turn off axis for a cleaner view
+plt.title("Original Image with Colored Circles (Offset & Scale Applied)")
+plt.show()
+
+# Optionally, save the overlay image to disk
+overlay_image.save('overlay_image_with_circles_offset_scaled.png')
+# Create a new blank image for circles only
+circle_image = Image.new('RGB', (image_width, image_height), (255, 255, 255))  # White background
+draw = ImageDraw.Draw(circle_image)
+
+# Loop through each position and draw the circle with the corresponding color
+for index, row in df_colors.iterrows():
+    i, j = row['Position']
+    r, g, b = row['R'], row['G'], row['B']
+
+    # Calculate the center of each circle with offset and scale
+    x_center = j * cell_width + global_x_offset
+    y_center = i * cell_height + global_y_offset
+
+    # Draw the circle on the new image
+    draw.ellipse(
+        [x_center - circle_diameter // 2, y_center - circle_diameter // 2,
+         x_center + circle_diameter // 2, y_center + circle_diameter // 2],
+        fill=(r, g, b),  # Fill with the extracted average color
+        outline=None  # No outline for a clean look
+    )
+
+# Show the image with only the colored circles
+plt.figure(figsize=(8, 8))
+plt.imshow(circle_image)
+plt.axis('off')  # Turn off axis for a cleaner view
+plt.title("Image with Only Colored Circles")
+plt.show()
+# Create a new blank image for red circles only
+red_circle_image = Image.new('RGB', (image_width, image_height), (255, 255, 255))  # White background
+draw = ImageDraw.Draw(red_circle_image)
+
+# Loop through each position and draw the circle with the red channel as the color
+for index, row in df_colors.iterrows():
+    i, j = row['Position']
+    r = row['R']  # Use only the red channel
+    g = b = 0     # Set green and blue to 0 for red-only colors
+
+    # Calculate the center of each circle with offset and scale
+    x_center = j * cell_width + global_x_offset
+    y_center = i * cell_height + global_y_offset
+
+    # Draw the circle on the new image
+    draw.ellipse(
+        [x_center - circle_diameter // 2, y_center - circle_diameter // 2,
+         x_center + circle_diameter // 2, y_center + circle_diameter // 2],
+        fill=(r, g, b),  # Fill with the red-only color
+        outline=None     # No outline for a clean look
+    )
+
+# Save the red image as a TIFF file
+red_circle_image.save('red_circles_image.tiff', format='TIFF')
+
+# Optionally display the red TIFF image
+plt.figure(figsize=(8, 8))
+plt.imshow(red_circle_image)
+plt.axis('off')  # Turn off axis for a cleaner view
+plt.title("Red Circles Image")
+plt.show()
+# Load the red TIFF image
+red_tiff_path = 'red_circles_image.tiff'
+red_image = Image.open(red_tiff_path)
+red_array = np.array(red_image)
+
+# Initialize a list to store intensities
+intensities = []
+
+# Loop through each circle and calculate intensity
+for index, row in df_colors.iterrows():
+    i, j = row['Position']
+
+    # Calculate the center of each circle
+    x_center = j * cell_width + global_x_offset
+    y_center = i * cell_height + global_y_offset
+    radius = circle_diameter // 2
+
+    # Create a mask for the circle region
+    y, x = np.ogrid[:red_array.shape[0], :red_array.shape[1]]
+    mask = (x - x_center)**2 + (y - y_center)**2 <= radius**2
+
+    # Extract the red channel in the circle region
+    circle_region_red = red_array[:, :, 0][mask]  # Only red channel
+
+    # Calculate the intensity (e.g., sum or mean of red channel)
+    intensity = circle_region_red.sum()  # Total intensity
+    # intensity = circle_region_red.mean()  # Average intensity (optional)
+
+    # Append to the list
+    intensities.append(intensity)
+
+# Add the intensities to the DataFrame
+df_colors['Red Intensity'] = intensities
+
+# Save the DataFrame to a CSV file
+df_colors.to_csv('red_circles_intensities.csv', index=False)
+
+# Display the first few rows of the DataFrame
+print(df_colors.head())
+# Create a new blank image for green circles only
+green_circle_image = Image.new('RGB', (image_width, image_height), (255, 255, 255))  # White background
+draw = ImageDraw.Draw(green_circle_image)
+
+# Loop through each position and draw the circle with the green channel as the color
+for index, row in df_colors.iterrows():
+    i, j = row['Position']
+    g = row['G']  # Use only the green channel
+    r = b = 0     # Set red and blue to 0 for green-only colors
+
+    # Calculate the center of each circle with offset and scale
+    x_center = j * cell_width + global_x_offset
+    y_center = i * cell_height + global_y_offset
+
+    # Draw the circle on the new image
+    draw.ellipse(
+        [x_center - circle_diameter // 2, y_center - circle_diameter // 2,
+         x_center + circle_diameter // 2, y_center + circle_diameter // 2],
+        fill=(r, g, b),  # Fill with the green-only color
+        outline=None     # No outline for a clean look
+    )
+
+# Save the green image as a TIFF file
+green_circle_image.save('green_circles_image.tiff', format='TIFF')
+
+# Optionally display the green TIFF image
+plt.figure(figsize=(8, 8))
+plt.imshow(green_circle_image)
+plt.axis('off')  # Turn off axis for a cleaner view
+plt.title("Green Circles Image")
+plt.show()
+# Load the green TIFF image
+green_tiff_path = 'green_circles_image.tiff'
+green_image = Image.open(green_tiff_path)
+green_array = np.array(green_image)
+
+# Initialize a list to store intensities
+intensities = []
+
+# Loop through each circle and calculate intensity
+for index, row in df_colors.iterrows():
+    i, j = row['Position']
+
+    # Calculate the center of each circle
+    x_center = j * cell_width + global_x_offset
+    y_center = i * cell_height + global_y_offset
+    radius = circle_diameter // 2
+
+    # Create a mask for the circle region
+    y, x = np.ogrid[:green_array.shape[0], :green_array.shape[1]]
+    mask = (x - x_center)**2 + (y - y_center)**2 <= radius**2
+
+    # Extract the green channel in the circle region
+    circle_region_green = green_array[:, :, 1][mask]  # Only green channel (index 1)
+
+    # Calculate the intensity (e.g., sum or mean of green channel)
+    intensity = circle_region_green.sum()  # Total intensity
+    # intensity = circle_region_green.mean()  # Average intensity (optional)
+
+    # Append to the list
+    intensities.append(intensity)
+
+# Add the intensities to the DataFrame
+df_colors['Green Intensity'] = intensities
+
+# Save the DataFrame to a CSV file
+df_colors.to_csv('green_circles_intensities.csv', index=False)
+
+# Display the first few rows of the DataFrame
+print(df_colors.head())
+# Load the GeneCSV Excel file to get Sequence Type
+gene_df = pd.read_excel('GeneCSV.xlsx')
+
+# Add the Sequence Type column from gene_df to df_colors
+# Assuming 'Gene Name' and 'Name' are in gene_df and should match the same row index as in df_colors
+df_colors['Sequence Type'] = gene_df['Sequence Type']  # Add the 'Sequence Type' from gene_df to df_colors
+
+# Initialize a new column for Gene/Control Name in df_colors
+df_colors['Gene/Control Name'] = None  # Create an empty column
+
+# Loop through each row in df_colors and add the corresponding Gene/Control Name
+for index, row in df_colors.iterrows():
+    sequence_type = row['Sequence Type']  # Get the Sequence Type from df_colors
+
+    # Ensure we are only working with the correct index range in both dataframes
+    if index < len(gene_df):  # Ensure index is valid for gene_df
+        # Get the corresponding gene/control name from gene_df
+        if sequence_type == 'OLIGO':
+            # For OLIGO, use the Gene Name from gene_df
+            df_colors.at[index, 'Gene/Control Name'] = gene_df.at[index, 'Gene Name']
+        
+        elif sequence_type == 'CONTROL':
+            # For CONTROL, use the Name from gene_df
+            df_colors.at[index, 'Gene/Control Name'] = gene_df.at[index, 'Name']
+
+# Display the updated df_colors DataFrame
+print(df_colors.head())
+import matplotlib.pyplot as plt
+
+# Plot histograms for red and green intensities
+plt.figure(figsize=(12, 6))
+plt.subplot(1, 2, 1)
+plt.hist(df_colors['Red Intensity'], bins=50, color='r', alpha=0.7)
+plt.title('Red Intensity Distribution')
+plt.xlabel('Red Intensity')
+plt.ylabel('Frequency')
+
+plt.subplot(1, 2, 2)
+plt.hist(df_colors['Green Intensity'], bins=50, color='g', alpha=0.7)
+plt.title('Green Intensity Distribution')
+plt.xlabel('Green Intensity')
+plt.ylabel('Frequency')
+
+plt.tight_layout()
+plt.show()
+# Define the threshold values for red and green intensities
+red_threshold = 5000  # Adjust this based on your desired threshold
+green_threshold = 5000  # Adjust this based on your desired threshold
+
+# Create a new DataFrame for wells with decent color
+colored_wells_df = df_colors[(df_colors['Red Intensity'] >= red_threshold) | 
+                             (df_colors['Green Intensity'] >= green_threshold)]
+
+# Display the new DataFrame with decent color wells
+print(colored_wells_df)
+# Normalize both red and green intensities to the range [0, 1]
+colored_wells_df['Red Intensity Normalized'] = colored_wells_df['Red Intensity'] / colored_wells_df['Red Intensity'].max()
+colored_wells_df['Green Intensity Normalized'] = colored_wells_df['Green Intensity'] / colored_wells_df['Green Intensity'].max()
+
+# Calculate the normalized combined intensity
+colored_wells_df['Normalized Combined Intensity'] = (colored_wells_df['Red Intensity Normalized'] + 
+                                                      colored_wells_df['Green Intensity Normalized'])
+
+# Create a heatmap with the combined normalized intensity values
+plt.figure(figsize=(10, 8))
+sns.heatmap(colored_wells_df[['Normalized Combined Intensity']], annot=True, cmap='YlGnBu', cbar=True, fmt='.2f', 
+            xticklabels=['Normalized Combined Intensity'], yticklabels=True)
+
+# Set title and labels
+plt.title('Heatmap of Normalized Combined Intensity (Red + Green) for Each Gene')
+plt.xlabel('Normalized Combined Intensity')
+plt.ylabel('Gene Name')
+
+# Display the heatmap
+plt.show()
